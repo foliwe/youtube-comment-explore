@@ -160,6 +160,7 @@ export default function Home() {
   const handleAuthorClick = (authorName: string) => {
     setAuthorFilter(authorName);
     setCurrentPage(1);
+    document.getElementById('comments-section')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const AuthorName = ({ name }: { name: string }) => (
@@ -349,6 +350,9 @@ export default function Home() {
                       onChange={(e) => {
                         setAuthorFilter(e.target.value);
                         setCurrentPage(1);
+                        if (e.target.value) {
+                          document.getElementById('comments-section')?.scrollIntoView({ behavior: 'smooth' });
+                        }
                       }}
                       placeholder="Enter author name..."
                       className="block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
@@ -375,7 +379,20 @@ export default function Home() {
                 </div>
 
                 <AdvancedFilters
-                  onFilterChange={setAdvancedFilters}
+                  onFilterChange={(filters) => {
+                    setAdvancedFilters(filters);
+                    setCurrentPage(1);
+                    // Check if any filter is active
+                    const hasActiveFilter = Object.entries(filters).some(([key, value]) => {
+                      if (key === 'dateRange') return value.start || value.end;
+                      if (key === 'commentLength') return value.min > 0 || value.max < 1000;
+                      if (key === 'tags') return value.length > 0;
+                      return value !== null && value !== 0 && value !== '';
+                    });
+                    if (hasActiveFilter) {
+                      document.getElementById('comments-section')?.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
                   onReset={() => {
                     setAdvancedFilters({
                       dateRange: { start: '', end: '' },
@@ -463,12 +480,19 @@ export default function Home() {
             {/* Statistics Section */}
             {showStats && commentStats && (
               <div className="mb-6">
-                <Statistics stats={commentStats} />
+                <Statistics 
+                  stats={commentStats} 
+                  onAuthorClick={(author) => {
+                    setAuthorFilter(author);
+                    setCurrentPage(1);
+                    document.getElementById('comments-section')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                />
               </div>
             )}
 
             {/* Comments Section */}
-            <div className="space-y-6">
+            <div id="comments-section" className="space-y-6">
               {paginatedComments.map((comment) => (
                 <div key={comment.id} className="bg-white rounded-lg shadow-sm p-6">
                   <div className="flex items-start space-x-3">

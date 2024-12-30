@@ -38,9 +38,10 @@ const chartOptions = {
 
 interface StatisticsProps {
   stats: CommentStats;
+  onAuthorClick?: (author: string) => void;
 }
 
-export default function Statistics({ stats }: StatisticsProps) {
+export default function Statistics({ stats, onAuthorClick }: StatisticsProps) {
   // Activity Over Time Chart Data
   const activityData = useMemo(() => {
     const dates = Object.keys(stats.commentsByDate).sort();
@@ -152,7 +153,12 @@ export default function Statistics({ stats }: StatisticsProps) {
           <ul className="mt-2 space-y-1">
             {stats.topCommenters.slice(0, 5).map(({ author, count }) => (
               <li key={author} className="flex justify-between items-center text-sm">
-                <span className="truncate">{author}</span>
+                <button 
+                  onClick={() => onAuthorClick?.(author)}
+                  className="truncate text-blue-600 hover:text-blue-800 hover:underline text-left"
+                >
+                  {author}
+                </button>
                 <span className="font-medium text-gray-600">{count}</span>
               </li>
             ))}
