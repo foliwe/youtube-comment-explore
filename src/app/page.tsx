@@ -2,6 +2,12 @@
 
 import { useState, useMemo } from 'react';
 import { CommentData } from '@/types';
+import { analyzeComment, CommentAnalysis } from '@/utils/commentAnalysis';
+import CommentAnalysisDisplay from '@/components/CommentAnalysis';
+import AdvancedFilters, { FilterOptions } from '@/components/AdvancedFilters';
+import { filterComments } from '@/utils/filterComments';
+import { calculateStatistics, CommentStats } from '@/utils/statistics';
+import Statistics from '@/components/Statistics';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -12,18 +18,45 @@ export default function Home() {
   const [comments, setComments] = useState<CommentData[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fetchStats, setFetchStats] = useState<{ totalComments: number; fetchedComments: number } | null>(null);
   const [stats, setStats] = useState<{ totalComments: number; fetchedComments: number } | null>(null);
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
   const [authorFilter, setAuthorFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedComment, setSelectedComment] = useState<string | null>(null);
+  const [commentAnalysis, setCommentAnalysis] = useState<CommentAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<FilterOptions>({
+    dateRange: { start: '', end: '' },
+    commentLength: { min: 0, max: 1000 },
+    minLikes: 0,
+    hasLinks: null,
+    hasHashtags: null,
+    hasMentions: null,
+    isVerified: null,
+    searchText: '',
+    tags: [],
+  });
+  const [showStats, setShowStats] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setStats(null);
+    setFetchStats(null);
     setAuthorFilter('');
     setCurrentPage(1);
+    setAdvancedFilters({
+      dateRange: { start: '', end: '' },
+      commentLength: { min: 0, max: 1000 },
+      minLikes: 0,
+      hasLinks: null,
+      hasHashtags: null,
+      hasMentions: null,
+      isVerified: null,
+      searchText: '',
+      tags: [],
+    });
     try {
       const videoId = extractVideoId(url);
       if (!videoId) {
@@ -38,7 +71,7 @@ export default function Home() {
       }
 
       setComments(data.comments);
-      setStats({
+      setFetchStats({
         totalComments: data.totalComments,
         fetchedComments: data.fetchedComments
       });
@@ -62,6 +95,7 @@ export default function Home() {
   const filteredAndSortedComments = useMemo(() => {
     let filtered = [...comments];
     
+    // Apply author filter
     if (authorFilter) {
       const searchTerm = authorFilter.toLowerCase();
       filtered = filtered.filter(comment => {
@@ -73,12 +107,16 @@ export default function Home() {
       });
     }
 
+    // Apply advanced filters
+    filtered = filterComments(filtered, advancedFilters);
+
+    // Apply sort
     return filtered.sort((a, b) => {
       const dateA = new Date(a.publishedAt).getTime();
       const dateB = new Date(b.publishedAt).getTime();
       return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
     });
-  }, [comments, sortOrder, authorFilter]);
+  }, [comments, sortOrder, authorFilter, advancedFilters]);
 
   const paginatedComments = useMemo(() => {
     const startIndex = (currentPage - 1) * COMMENTS_PER_PAGE;
@@ -217,6 +255,24 @@ export default function Home() {
     );
   };
 
+  const handleCommentClick = async (commentText: string) => {
+    setSelectedComment(commentText);
+    setAnalyzing(true);
+    try {
+      const analysis = await analyzeComment(commentText);
+      setCommentAnalysis(analysis);
+    } catch (error) {
+      console.error('Error analyzing comment:', error);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const commentStats = useMemo(() => {
+    if (!comments.length) return null;
+    return calculateStatistics(comments);
+  }, [comments]);
+
   return (
     <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
@@ -248,16 +304,16 @@ export default function Home() {
             </button>
           </form>
 
-          {stats && (
+          {fetchStats && (
             <div className="mt-4 pt-4 border-t border-gray-200">
               <div className="grid grid-cols-2 gap-4 text-center">
                 <div className="bg-blue-50 rounded-lg p-3">
                   <p className="text-sm font-medium text-gray-500">Total Comments</p>
-                  <p className="mt-1 text-2xl font-semibold text-blue-600">{formatNumber(stats.totalComments)}</p>
+                  <p className="mt-1 text-2xl font-semibold text-blue-600">{formatNumber(fetchStats.totalComments)}</p>
                 </div>
                 <div className="bg-green-50 rounded-lg p-3">
                   <p className="text-sm font-medium text-gray-500">Fetched Comments</p>
-                  <p className="mt-1 text-2xl font-semibold text-green-600">{formatNumber(stats.fetchedComments)}</p>
+                  <p className="mt-1 text-2xl font-semibold text-green-600">{formatNumber(fetchStats.fetchedComments)}</p>
                 </div>
               </div>
             </div>
@@ -280,40 +336,138 @@ export default function Home() {
         {comments.length > 0 && (
           <>
             <div className="bg-white p-4 rounded-lg shadow-sm mb-6">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
-                <div className="flex-1 w-full">
-                  <label htmlFor="author-search" className="block text-sm font-medium text-gray-700 mb-1">
-                    Search by Author
-                  </label>
-                  <input
-                    id="author-search"
-                    type="text"
-                    value={authorFilter}
-                    onChange={(e) => {
-                      setAuthorFilter(e.target.value);
-                      setCurrentPage(1);
-                    }}
-                    placeholder="Enter author name..."
-                    className="block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                  />
+              <div className="flex flex-col space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-4">
+                  <div className="flex-1 w-full">
+                    <label htmlFor="author-search" className="block text-sm font-medium text-gray-700 mb-1">
+                      Search by Author
+                    </label>
+                    <input
+                      id="author-search"
+                      type="text"
+                      value={authorFilter}
+                      onChange={(e) => {
+                        setAuthorFilter(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      placeholder="Enter author name..."
+                      className="block w-full rounded-md border border-gray-300 p-2 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="flex-shrink-0 flex space-x-2">
+                    <button
+                      onClick={toggleSortOrder}
+                      className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <span>Sort by: {sortOrder === 'newest' ? 'Newest First' : 'Oldest First'}</span>
+                      <span className="text-gray-400">
+                        {sortOrder === 'newest' ? '↓' : '↑'}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setShowStats(!showStats)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <span>{showStats ? 'Hide Stats' : 'Show Stats'}</span>
+                      <span className="text-gray-400">📊</span>
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={toggleSortOrder}
-                  className="flex-shrink-0 flex items-center space-x-2 px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <span>Sort by: {sortOrder === 'newest' ? 'Newest First' : 'Oldest First'}</span>
-                  <span className="text-gray-400">
-                    {sortOrder === 'newest' ? '↓' : '↑'}
-                  </span>
-                </button>
+
+                <AdvancedFilters
+                  onFilterChange={setAdvancedFilters}
+                  onReset={() => {
+                    setAdvancedFilters({
+                      dateRange: { start: '', end: '' },
+                      commentLength: { min: 0, max: 1000 },
+                      minLikes: 0,
+                      hasLinks: null,
+                      hasHashtags: null,
+                      hasMentions: null,
+                      isVerified: null,
+                      searchText: '',
+                      tags: [],
+                    });
+                    setCurrentPage(1);
+                  }}
+                />
               </div>
-              {authorFilter && (
+              
+              <div className="mt-4 flex flex-wrap gap-2">
+                {Object.entries(advancedFilters).some(([key, value]) => {
+                  if (key === 'dateRange') return value.start || value.end;
+                  if (key === 'commentLength') return value.min > 0 || value.max < 1000;
+                  if (key === 'tags') return value.length > 0;
+                  return value !== null && value !== 0 && value !== '';
+                }) && (
+                  <div className="w-full">
+                    <div className="text-sm text-gray-500 mb-2">Active Filters:</div>
+                    <div className="flex flex-wrap gap-2">
+                      {advancedFilters.dateRange.start && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          From: {new Date(advancedFilters.dateRange.start).toLocaleDateString()}
+                        </span>
+                      )}
+                      {advancedFilters.dateRange.end && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          To: {new Date(advancedFilters.dateRange.end).toLocaleDateString()}
+                        </span>
+                      )}
+                      {(advancedFilters.commentLength.min > 0 || advancedFilters.commentLength.max < 1000) && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          Length: {advancedFilters.commentLength.min}-{advancedFilters.commentLength.max}
+                        </span>
+                      )}
+                      {advancedFilters.minLikes > 0 && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          Min Likes: {advancedFilters.minLikes}
+                        </span>
+                      )}
+                      {advancedFilters.hasLinks !== null && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          {advancedFilters.hasLinks ? 'Has Links' : 'No Links'}
+                        </span>
+                      )}
+                      {advancedFilters.hasHashtags !== null && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          {advancedFilters.hasHashtags ? 'Has Hashtags' : 'No Hashtags'}
+                        </span>
+                      )}
+                      {advancedFilters.hasMentions !== null && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          {advancedFilters.hasMentions ? 'Has Mentions' : 'No Mentions'}
+                        </span>
+                      )}
+                      {advancedFilters.searchText && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          Search: {advancedFilters.searchText}
+                        </span>
+                      )}
+                      {advancedFilters.tags.map(tag => (
+                        <span key={tag} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                          Tag: {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {(authorFilter || filteredAndSortedComments.length !== comments.length) && (
                 <div className="mt-2 text-sm text-gray-500">
                   Showing {filteredAndSortedComments.length} matching comments
                 </div>
               )}
             </div>
 
+            {/* Statistics Section */}
+            {showStats && commentStats && (
+              <div className="mb-6">
+                <Statistics stats={commentStats} />
+              </div>
+            )}
+
+            {/* Comments Section */}
             <div className="space-y-6">
               {paginatedComments.map((comment) => (
                 <div key={comment.id} className="bg-white rounded-lg shadow-sm p-6">
@@ -334,7 +488,24 @@ export default function Home() {
                           {formatDate(comment.publishedAt)}
                         </span>
                       </div>
-                      <p className="text-gray-700 mt-1">{comment.textDisplay}</p>
+                      <p 
+                        className="text-gray-700 mt-1 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                        onClick={() => handleCommentClick(comment.textDisplay)}
+                      >
+                        {comment.textDisplay}
+                      </p>
+                      {selectedComment === comment.textDisplay && (
+                        <div className="mt-2">
+                          {analyzing ? (
+                            <div className="text-center py-4">
+                              <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+                              <p className="mt-2 text-sm text-gray-500">Analyzing comment...</p>
+                            </div>
+                          ) : commentAnalysis && (
+                            <CommentAnalysisDisplay analysis={commentAnalysis} />
+                          )}
+                        </div>
+                      )}
                       <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                         <span>👍 {formatNumber(comment.likeCount)}</span>
                         <span>💬 {formatNumber(comment.replyCount)} replies</span>
@@ -360,7 +531,24 @@ export default function Home() {
                                     {formatDate(reply.publishedAt)}
                                   </span>
                                 </div>
-                                <p className="text-gray-700 text-sm mt-1">{reply.textDisplay}</p>
+                                <p 
+                                  className="text-gray-700 text-sm mt-1 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors"
+                                  onClick={() => handleCommentClick(reply.textDisplay)}
+                                >
+                                  {reply.textDisplay}
+                                </p>
+                                {selectedComment === reply.textDisplay && (
+                                  <div className="mt-2">
+                                    {analyzing ? (
+                                      <div className="text-center py-4">
+                                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+                                        <p className="mt-2 text-sm text-gray-500">Analyzing comment...</p>
+                                      </div>
+                                    ) : commentAnalysis && (
+                                      <CommentAnalysisDisplay analysis={commentAnalysis} />
+                                    )}
+                                  </div>
+                                )}
                                 <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                                   <span>👍 {formatNumber(reply.likeCount)}</span>
                                 </div>
