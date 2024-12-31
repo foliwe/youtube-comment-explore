@@ -57,9 +57,9 @@
 - [x] Easy-to-use filters
 
 ## Planned Features
-- [ ] Export comments to CSV/JSON
-- [ ] Dark mode support
-- [ ] Save favorite videos
+- [x] Export comments to CSV/JSON
+- [x] Dark mode support
+- [x] Save favorite videos
 - [ ] Comment threads visualization
 - [ ] Advanced sentiment analysis
 - [ ] User engagement metrics
