@@ -1,21 +1,24 @@
 import React from 'react';
 import { CommentData } from '@/types';
-import CommentAnalysisDisplay from '@/components/CommentAnalysis';
+import CommentAnalysisDisplay from './CommentAnalysis';
 
 interface CommentThreadProps {
   comment: CommentData;
+  isReply?: boolean;
   onAuthorClick: (author: string) => void;
   formatDate: (date: string) => string;
   formatNumber: (num: number) => string;
-  onCommentClick: (text: string) => void;
+  onCommentClick: (comment: string | null) => void;
   selectedComment: string | null;
   analyzing: boolean;
   commentAnalysis: any;
   authorFilter: string | null;
+  onReply?: (parentId: string) => void;
 }
 
 const CommentThread: React.FC<CommentThreadProps> = ({
   comment,
+  isReply = false,
   onAuthorClick,
   formatDate,
   formatNumber,
@@ -24,93 +27,117 @@ const CommentThread: React.FC<CommentThreadProps> = ({
   analyzing,
   commentAnalysis,
   authorFilter,
+  onReply,
 }) => {
-  const AuthorName = ({ name }: { name: string }) => (
-    <button
-      onClick={() => onAuthorClick(name)}
-      className={`group relative hover:text-blue-600 focus:outline-none ${
-        authorFilter === name ? 'bg-yellow-100 px-2 py-1 rounded-full font-semibold text-yellow-800' : ''
-      }`}
-    >
-      {name}
-      {authorFilter === name && (
-        <span className="absolute -top-1 -right-1 flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
-        </span>
-      )}
-      <span className="absolute hidden group-hover:block bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-900 rounded whitespace-nowrap">
-        {authorFilter === name ? 'Clear filter' : 'Filter by author'}
-      </span>
-    </button>
-  );
+  const isSelected = selectedComment === comment.textDisplay;
+  const isHighlighted = authorFilter === comment.authorDisplayName;
 
-  const renderComment = (comment: CommentData, isReply = false) => (
-    <div className={`flex items-start space-x-3 ${isReply ? 'mt-4' : ''}`}>
-      {comment.authorProfileImageUrl && (
+  const handleCommentClick = () => {
+    onCommentClick(isSelected ? null : comment.textDisplay);
+  };
+
+  const handleAuthorClick = () => {
+    onAuthorClick(comment.authorDisplayName);
+  };
+
+  return (
+    <div className={`${isHighlighted ? 'bg-blue-200 p-4 rounded-lg' : ''}`}>
+      <div className="flex space-x-3">
+        {/* Author Image */}
         <img
           src={comment.authorProfileImageUrl}
           alt={comment.authorDisplayName}
-          className={`rounded-full ${isReply ? 'w-8 h-8' : 'w-10 h-10'}`}
+          className="h-10 w-10 rounded-full"
         />
-      )}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center space-x-2">
-          <h3 className={`font-medium text-gray-900 ${isReply ? 'text-sm' : ''}`}>
-            <AuthorName name={comment.authorDisplayName} />
-          </h3>
-          <span className="text-sm text-gray-500">
-            {formatDate(comment.publishedAt)}
-          </span>
-        </div>
-        <p
-          className={`text-gray-700 mt-1 cursor-pointer hover:bg-gray-50 p-2 rounded transition-colors ${
-            isReply ? 'text-sm' : ''
-          }`}
-          onClick={() => onCommentClick(comment.textDisplay)}
-        >
-          {comment.textDisplay}
-        </p>
-        {selectedComment === comment.textDisplay && (
-          <div className="mt-2">
-            {analyzing ? (
-              <div className="text-center py-4">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
-                <p className="mt-2 text-sm text-gray-500">Analyzing comment...</p>
-              </div>
-            ) : (
-              commentAnalysis && <CommentAnalysisDisplay analysis={commentAnalysis} />
-            )}
-          </div>
-        )}
-        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
-          <span>👍 {formatNumber(comment.likeCount)}</span>
-          {!isReply && <span>💬 {formatNumber(comment.replyCount)} replies</span>}
-        </div>
-      </div>
-    </div>
-  );
 
-  return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      {renderComment(comment)}
-      {comment.replies && comment.replies.length > 0 && (
-        <div className="mt-4 pl-4 border-l-2 border-gray-200 space-y-4">
-          {comment.replies.map((reply) => (
-            <div key={reply.id}>{renderComment(reply, true)}
-              {selectedComment === reply.textDisplay && (
-                <div className="mt-2 ml-11">
-                  {analyzing ? (
-                    <div className="text-center py-4">
-                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
-                      <p className="mt-2 text-sm text-gray-500">Analyzing comment...</p>
-                    </div>
-                  ) : (
-                    commentAnalysis && <CommentAnalysisDisplay analysis={commentAnalysis} />
-                  )}
+        {/* Comment Content */}
+        <div className="flex-1 space-y-1">
+          {/* Author and Date */}
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={handleAuthorClick}
+              className="text-sm font-medium text-gray-900 hover:underline"
+            >
+              {comment.authorDisplayName}
+            </button>
+            <span className="text-sm text-gray-500">
+              {formatDate(comment.publishedAt)}
+            </span>
+          </div>
+
+          {/* Comment Text */}
+          <div 
+            className="text-sm text-gray-700 whitespace-pre-wrap cursor-pointer hover:bg-gray-50 rounded p-1"
+            onClick={handleCommentClick}
+          >
+            {comment.textDisplay}
+          </div>
+
+          {/* Likes Count */}
+          <div className="flex items-center space-x-2 text-sm text-gray-500">
+            <span>👍 {formatNumber(comment.likeCount)}</span>
+          </div>
+
+          {/* Analysis Section */}
+          {isSelected && (
+            <div className="mt-2 relative">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCommentClick(null);
+                }}
+                className="absolute top-2 right-2 text-gray-500 hover:text-gray-700"
+                aria-label="Close analysis"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+              {analyzing ? (
+                <div className="text-center py-4">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+                  <p className="mt-2 text-sm text-gray-500">Analyzing comment...</p>
                 </div>
+              ) : (
+                commentAnalysis && (
+                  <div className="bg-white rounded-lg shadow-sm p-4">
+                    <CommentAnalysisDisplay analysis={commentAnalysis} />
+                  </div>
+                )
               )}
             </div>
+          )}
+
+          {/* Reply Button */}
+          {!isReply && onReply && (
+            <button
+              onClick={() => onReply(comment.id)}
+              className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+            >
+              Reply
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Replies */}
+      {comment.replies && comment.replies.length > 0 && (
+        <div className="mt-4 ml-8 space-y-4">
+          {comment.replies.map((reply) => (
+            <CommentThread
+              key={reply.id}
+              comment={reply}
+              isReply={true}
+              onAuthorClick={onAuthorClick}
+              formatDate={formatDate}
+              formatNumber={formatNumber}
+              onCommentClick={onCommentClick}
+              selectedComment={selectedComment}
+              analyzing={analyzing}
+              commentAnalysis={commentAnalysis}
+              authorFilter={authorFilter}
+              onReply={onReply}
+            />
           ))}
         </div>
       )}

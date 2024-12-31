@@ -26,11 +26,19 @@ export async function GET(request: Request) {
     // First, get video statistics to get the total comment count
     const videoResponse = await youtube.videos.list({
       key: auth,
-      part: ['statistics'],
+      part: ['snippet', 'statistics'],
       id: [videoId],
     });
 
-    const totalCommentCount = videoResponse.data.items?.[0]?.statistics?.commentCount || '0';
+    const videoInfo = videoResponse.data.items?.[0];
+    if (!videoInfo) {
+      return NextResponse.json({ 
+        message: 'Video not found',
+        error: 'Video not found'
+      }, { status: 404 });
+    }
+
+    const totalCommentCount = videoInfo.statistics?.commentCount || '0';
 
     // Fetch top-level comments
     const response = await youtube.commentThreads.list({
@@ -74,7 +82,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ 
       comments,
       totalComments: parseInt(totalCommentCount),
-      fetchedComments: fetchedCommentsCount
+      fetchedComments: fetchedCommentsCount,
+      videoInfo: {
+        title: videoInfo.snippet?.title,
+        channelTitle: videoInfo.snippet?.channelTitle,
+        publishedAt: videoInfo.snippet?.publishedAt,
+        thumbnailUrl: videoInfo.snippet?.thumbnails?.high?.url,
+        viewCount: videoInfo.statistics?.viewCount,
+        likeCount: videoInfo.statistics?.likeCount,
+      }
     });
   } catch (error: any) {
     console.error('Error fetching comments:', error);

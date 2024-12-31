@@ -11,6 +11,7 @@ import Statistics from '@/components/Statistics';
 import SentimentAnalysis from '@/components/SentimentAnalysis';
 import { exportToCSV, exportToJSON, downloadFile } from '@/utils/exportUtils';
 import CommentThread from '@/components/CommentThread';
+import VideoPreview from '@/components/VideoPreview';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -41,6 +42,8 @@ export default function Home() {
     tags: [],
   });
   const [showStats, setShowStats] = useState(false);
+  const [currentVideoId, setCurrentVideoId] = useState('');
+  const [videoInfo, setVideoInfo] = useState(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +52,9 @@ export default function Home() {
     setFetchStats(null);
     setAuthorFilter('');
     setCurrentPage(1);
+    setCurrentVideoId('');
+    setVideoInfo(null);
+    setComments([]);
     setAdvancedFilters({
       dateRange: { start: '', end: '' },
       commentLength: { min: 0, max: 1000 },
@@ -60,19 +66,24 @@ export default function Home() {
       searchText: '',
       tags: [],
     });
+
     try {
       const videoId = extractVideoId(url);
       if (!videoId) {
         throw new Error('Invalid YouTube URL');
       }
 
+      setCurrentVideoId(videoId);
+
       const response = await fetch(`/api/comments?videoId=${videoId}`);
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch comments');
+        throw new Error(data.error || 'Failed to fetch comments');
       }
 
+      setCurrentVideoId(videoId);
+      setVideoInfo(data.videoInfo);
       setComments(data.comments);
       setFetchStats({
         totalComments: data.totalComments,
@@ -259,11 +270,22 @@ export default function Home() {
     );
   };
 
-  const handleCommentClick = async (commentText: string) => {
-    setSelectedComment(commentText);
+  const handleCommentClick = async (text: string | null) => {
+    if (text === null) {
+      setSelectedComment(null);
+      return;
+    }
+    
+    if (selectedComment === text) {
+      setSelectedComment(null);
+      return;
+    }
+
+    setSelectedComment(text);
     setAnalyzing(true);
+
     try {
-      const analysis = await analyzeComment(commentText);
+      const analysis = await analyzeComment(text);
       setCommentAnalysis(analysis);
     } catch (error) {
       console.error('Error analyzing comment:', error);
@@ -322,6 +344,13 @@ export default function Home() {
                   {loading ? 'Loading...' : 'Fetch Comments'}
                 </button>
               </form>
+
+              {currentVideoId && videoInfo && (
+                <VideoPreview 
+                  videoId={currentVideoId}
+                  videoInfo={videoInfo}
+                />
+              )}
 
               {fetchStats && (
                 <div className="mt-4 pt-4 border-t border-gray-200">
